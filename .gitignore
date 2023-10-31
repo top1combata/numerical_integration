@@ -1,0 +1,10 @@
+bin
+build
+
+*.txt
+*.png
+*.o
+*.obj
+*.exe
+*.out
+*.pdf
