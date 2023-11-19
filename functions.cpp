@@ -1,23 +1,57 @@
 #include "functions.h"
 
 
-val_t fp(val_t x)
+
+/*
+   b
+   /
+   |   x^k
+   | --------- dx
+   /  x^alpha
+   a
+*/
+val_t moment(size_t k, val_t a, val_t b, val_t alpha)
 {
-    return f(x)*p(x);
+    val_t power = k-alpha+1;
+    return (pow(b, power) - pow(a, power)) / power;
 }
 
 
-val_t f(val_t x)
+std::vector<val_t> poly_interpol_quadrature(const std::vector<val_t>& nodes, val_t a, val_t b, val_t alpha)
 {
-    return 4*my_cos(x/2)*my_exp(-2*x/3) + val_t(12)/5 * my_sin(9*x/2)*my_exp(x/8)+2;
+    int n = nodes.size();
+
+    Matrix<val_t> A = vandermonde(nodes, n-1, true);
+
+    Row<val_t> c(n);
+    for (int i = 0; i < n; i++)
+        c[i] = moment(i,a,b,alpha);
+
+    return LU_solve(A,c).getData();
 }
 
 
-val_t p(val_t x)
+std::vector<val_t> find_gaussian_nodes(val_t a, val_t b, val_t alpha, size_t n)
 {
-	return my_pow(x-A, -ALPHA) * my_pow(B-x, -BETA);
-}
+    std::vector<val_t> moments(2*n);
+    for (size_t i = 0; i < 2*n; i++)
+        moments[i] = moment(i,a,b,alpha);
 
+    Matrix<val_t> M(n,n);
+    for (size_t i = 0; i < n; i++)
+        for (size_t j = 0; j < n; j++)
+            M[i][j] = moments[i+j];
+
+    std::vector<val_t> tmp = LU_solve(M,-Row(std::vector(moments.begin()+n, moments.begin()+2*n))).getData();
+
+    tmp.push_back(1);
+    std::reverse(tmp.begin(), tmp.end());
+    Polynomial<val_t> node_poly = tmp;
+
+    auto res = find_roots(node_poly, a, b);
+    std::sort(res.begin(), res.end());
+    return res;
+}
 
 
 
@@ -30,121 +64,130 @@ val_t integrate_riemann(const std::function<val_t(val_t)>& f, val_t l, val_t r, 
 }
 
 
-static val_t moment(size_t i, val_t l, val_t r)
-{
-    val_t power = i-BETA+1;
-    return (my_pow(B-l, power) - my_pow(B-r, power)) / (power);
-}
-
-
-static std::vector<val_t> poly_interpol_quadrature(const std::vector<val_t>& nodes, val_t l, val_t r)
-{
-    int n = nodes.size();
-
-    Matrix<val_t> A = vandermonde(nodes, n-1, true);
-
-    Row<val_t> b(n);
-    for (int i = 0; i < n; i++)
-        b[i] = moment(i,l,r);
-
-    //return linear_system_solve(A,b).getData();
-    return LU_solve(A,b).getData();
-}
-
-
-static std::vector<val_t> find_gaussian_nodes(val_t l, val_t r, size_t n)
-{
-    std::vector<val_t> moments(2*n);
-    for (size_t i = 0; i < 2*n; i++)
-        moments[i] = moment(i,l,r);
-
-    Matrix<val_t> M(n,n);
-    for (size_t i = 0; i < n; i++)
-        for (size_t j = 0; j < n; j++)
-            M[i][j] = moments[i+j];
-
-    std::vector<val_t> tmp = linear_system_solve(M,-Row(std::vector(moments.begin()+n, moments.begin()+2*n))).getData();
-
-    tmp.push_back(1);
-    std::reverse(tmp.begin(), tmp.end());
-    Polynomial<val_t> node_poly = tmp;
-
-    return find_roots(node_poly, l, r);
-}
-
-
-// 
-
 // n nodes
-Solve integrate_newton(const std::function<val_t(val_t)>& f, val_t l, val_t r, size_t n)
+val_t integrate_newton(const std::function<val_t(val_t)>& f, val_t a, val_t b, val_t alpha, size_t n)
 {
-        std::vector<val_t> nodes(n);
-        val_t gap = (r-l)/(n-1);
-        for (size_t i = 0; i < n; i++)
-                nodes[i] = B-r + gap*i;
-        
-        std::vector<val_t> coeffs = poly_interpol_quadrature(nodes, l, r);
-
-        val_t res = 0;
-        for (size_t i = 0; i < n; i++)
-                res += coeffs[i] * f(B-nodes[i]);
-
-        val_t abs_sum = 0;
-        for (size_t i = 0; i < n; i++)
-                abs_sum += my_abs(coeffs[i]);
-        return {res, abs_sum};
-}
-
-
-
-
-Solve integrate_gauss(const std::function<val_t(val_t)>& f, val_t l, val_t r, size_t n)
-{
-    std::vector<val_t> nodes = find_gaussian_nodes(l,r,n);
-
-    if (nodes.size() < n)
-    {
-        std::cout << "\nNO ROOTS\n";
-        return {0,0};
-    }
+    if (a > b)
+        return 0;
+    std::vector<val_t> nodes(n);
+    val_t h = (b-a)/(n-1);
     for (size_t i = 0; i < n; i++)
-    {
-        if (nodes[i] < B-r || nodes[i] > B-l)
-        {
-            std::cout << "\nROOTS OUT OF BOUNDS\n";
-            return {0,0};
-        }
-    }
-    std::vector<val_t> coeffs = poly_interpol_quadrature(nodes, l, r);
-    for (auto cf : coeffs)
+            nodes[i] = a + h*i;
+    
+    std::vector<val_t> coeffs = poly_interpol_quadrature(nodes, a, b, alpha);
+    for (val_t cf : coeffs)
         if (cf < 0)
         {
-            std::cout << "\nNEGATIVE \n";
-            return {0,0};
+            std::cout << "NEWTON NEGATIVE WEIGHT\n";
+            exit(-3);
         }
 
     val_t res = 0;
     for (size_t i = 0; i < n; i++)
-            res += coeffs[i] * f(B-nodes[i]);
+            res += coeffs[i] * f(nodes[i]);
 
-    val_t abs_sum = 0;
-    for (size_t i = 0; i < n; i++)
-            abs_sum += my_abs(coeffs[i]);
-
-    return {res, abs_sum};
+    return res;
 }
 
 
 
 
-val_t integrate(const std::function<val_t(val_t)>& f, val_t l, val_t r, val_t h, bool gauss, size_t k)
+val_t integrate_gauss(const std::function<val_t(val_t)>& f, val_t a, val_t b, val_t alpha, size_t n)
 {
-    size_t n = ceil(double((r-l)/h));
-    h = (r-l)/n;
+    std::vector<val_t> nodes = find_gaussian_nodes(a, b, alpha, n);
 
-    val_t sum = 0;
+    if (nodes.size() != n)
+    {
+        std::cout << "GAUSS NO ROOTS\n";
+        exit(-1);
+    }
+
     for (size_t i = 0; i < n; i++)
-        sum += (gauss ? integrate_gauss(f, l+i*h, l+(i+1)*h, k).res : integrate_newton(f, l+i*h, l+(i+1)*h, k).res);
+        if (nodes[i] < a || nodes[i] > b)
+        {
+            std::cout << "GAUSS ROOTS OUT OF BOUNDS\n";
+            exit(-2);
+        }
         
+
+    std::vector<val_t> coeffs = poly_interpol_quadrature(nodes, a, b, alpha);
+
+    for (val_t cf : coeffs)
+        if (cf < 0)
+        {
+            std::cout << "GAUSS NEGATIVE WEIGHT\n";
+            exit(-3);
+        }
+
+    val_t res = 0;
+    for (size_t i = 0; i < n; i++)
+            res += coeffs[i] * f(nodes[i]);
+
+    return res;
+}
+
+
+
+/*
+   b
+   /
+   |   f(x)
+   | --------- dx
+   /  x^alpha
+   0
+*/
+static val_t integrate_qaws_wrapper(const std::function<val_t(val_t)>& f, val_t b, val_t alpha, val_t h, bool gauss, size_t k)
+{
+    size_t n = ceil(double(b/h));
+    h = b/n;
+
+#ifdef PARALLEL
+    omp_set_num_threads(NUM_THREADS);
+    
+    val_t sums[NUM_THREADS];
+    for (val_t& sum : sums)
+        sum = 0;
+
+    #pragma omp parallel
+    {
+        size_t i = omp_get_thread_num();
+
+        val_t a = h*(n/NUM_THREADS * i + std::min(i, n%NUM_THREADS));
+        size_t intervals = n/NUM_THREADS + (i < n%NUM_THREADS);
+
+        for (size_t j = 0; j < intervals; j++)
+        {
+            sums[i] += (gauss ? integrate_gauss(f, a, a+h, alpha, k) : integrate_newton(f, a, a+h, alpha, k));
+            a += h;
+        }
+    }
+    val_t sum = 0;
+    for (int i = 0; i < NUM_THREADS; i++)
+        sum += sums[i];
     return sum;
+#else
+
+    val_t sum = 0, a = 0;
+    for (size_t i = 0; i < n; i++)
+    {
+        sum += (gauss ? integrate_gauss(f, a, a+h, alpha, k) : integrate_newton(f, a, a+h, alpha, k));
+        a += h;
+    }
+    return sum;
+#endif
+}
+
+
+
+val_t integrate_qaws(const std::function<val_t(val_t)>& f, val_t a, val_t b, val_t alpha, val_t beta, val_t h, bool gauss, size_t k)
+{
+    if (alpha == 0)
+        return integrate_qaws_wrapper([f,b](val_t x){return f(b-x);}, b-a, beta, h, gauss, k);
+    
+    if (beta == 0)
+        return integrate_qaws_wrapper([f,a](val_t x){return f(x+a);}, b-a, alpha, h, gauss, k);
+
+    return
+        integrate_qaws([f,b,beta](val_t x){return f(x)/pow(b-x,beta);}, a, (a+b)/2, alpha, 0, h, gauss, k)+
+        integrate_qaws([f,a,alpha](val_t x){return f(x)/pow(x-a,alpha);}, (a+b)/2, b, 0, beta, h, gauss, k);
 }

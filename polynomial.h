@@ -4,14 +4,6 @@
 #include <iostream>
 #include <vector>
 
-/*
-template<class T>
-class Polynomial;
-
-template<class T>
-std::ostream& operator<<(std::ostream&, const Polynomial<T>&);
-*/
-
 
 template<class T>
 class Polynomial
@@ -35,7 +27,7 @@ public:
     size_t deg() const;
 
     T operator()(T) const;
-    const T& operator[](size_t) const;
+    T operator[](size_t) const;
     T& operator[](size_t);
     Polynomial operator-() const;
     Polynomial& operator/=(T);
@@ -140,7 +132,7 @@ T Polynomial<T>::operator()(T value) const
 
 
 template<class T>
-const T& Polynomial<T>::operator[](size_t i) const
+T Polynomial<T>::operator[](size_t i) const
 {
     return m_coeffs[i];
 }

@@ -1,8 +1,8 @@
 BUILD_DIR   := bin
 COMPILER    := g++
 SOURCES     := main.cpp functions.cpp utils.cpp
-FLAGS       := -Wall -O2 -std=c++20
-DEBUG_FLAGS := -O0 -g -std=c++20 
+FLAGS       := -Wall -O2 -std=c++20 -fopenmp
+DEBUG_FLAGS := -O0 -g -std=c++20 -fopenmp
 EXEC_NAME   := main
 LIBS        := -lgmp
 

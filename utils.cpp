@@ -1,113 +1,6 @@
 #include "utils.h"
 
 
-val_t my_sin(val_t x)
-{
-#ifndef MULTIPRECISION
-    return std::sin(x);
-#else
-    x += PI;
-    x -= 2*PI * floor(x/PI/2);
-    x -= PI;
-    if (x > PI/2)  x = PI-x;
-    if (x < -PI/2) x = -x-PI;
-
-    val_t tmp(x), prev(0), curr(x);
-
-    for (size_t i = 2; prev - curr != val_t(0); i += 2)
-    {
-        prev = curr;
-        tmp *= -(x*x)/i/(i+1);
-        curr += tmp;
-    }
-    return curr;
-#endif
-}
-
-val_t my_cos(val_t x)
-{
-    return my_sin(PI/2-x);
-}
-
-val_t my_exp(val_t x)
-{
-#ifndef MULTIPRECISION
-    return std::exp(x);
-#else
-    val_t prev(0), curr(1), tmp(1);
-    for (size_t n = 1; prev != curr; n++)
-    {
-        prev = curr;
-        tmp *= x/n;
-        curr += tmp;
-    }
-    return curr;
-#endif
-}
-
-
-val_t my_pow(val_t x, val_t y)
-{
-#ifndef MULTIPRECISION
-    return std::pow(x,y);
-#else
-    return pow(x,y);
-
-    if (x <= 0 || x < EPS)
-        return 0;
-    return my_exp(y * my_log(x));
-#endif
-}
-
-
-val_t my_log(val_t x)
-{
-#ifndef MULTIPRECISION
-    return std::log(x);
-#else
-    return log(x);
-    size_t k = 0;
-    while (x >= val_t(2))
-    {
-        x /= E;
-        k++;
-    }
-    x -= val_t(1);
-
-    val_t prev(1), curr(0), tmp(x);
-    for (size_t i = 1; prev != curr; i++)
-    {
-        prev = curr;
-        curr += tmp/i;
-        tmp *= -x;
-    }
-    return curr+k;
-#endif
-}
-
-
-val_t my_abs(val_t x)
-{
-    return (x > 0 ? x : -x);
-}
-
-
-val_t my_sqrt(val_t x)
-{
-#ifndef MULTIPRECISION
-    return std::sqrt(x);
-#else
-    return sqrt(x);
-    val_t curr = x/2, prev = x;
-    while (my_abs(curr-prev) > curr*EPS)
-    {
-        prev = curr;
-        curr = (curr + x/curr)/2;
-    }
-    return curr;
-#endif
-}
-
 
 sturm_sequence::sturm_sequence(Polynomial<val_t> p)
 {
@@ -125,7 +18,6 @@ sturm_sequence::sturm_sequence(Polynomial<val_t> p)
 }
 
 
-
 int sturm_sequence::operator()(val_t val) const
 {
     int count = 0;
@@ -139,7 +31,6 @@ int sturm_sequence::operator()(val_t val) const
 }
 
 
-
 std::vector<val_t> roots_quadratic(const Polynomial<val_t>& poly)
 {
     val_t a = poly[2], b = poly[1], c = poly[0];
@@ -148,7 +39,7 @@ std::vector<val_t> roots_quadratic(const Polynomial<val_t>& poly)
     if (d < 0)
         return {};
 
-    return {(-b + my_sqrt(d))/2/a, (-b - my_sqrt(d))/2/a};
+    return {(-b + sqrt(d))/2/a, (-b - sqrt(d))/2/a};
 }
 
 
@@ -163,7 +54,7 @@ std::vector<val_t> roots_cubic(const Polynomial<val_t>& poly)
     if (Q.real() >= 0)
         return {};
 
-    std::complex<val_t> rot(val_t(-1)/2, my_sqrt(3)/2);
+    std::complex<val_t> rot(val_t(-1)/2, sqrt(3)/2);
     std::complex<val_t> alpha = std::pow( std::sqrt(Q) - std::complex<val_t>(q/val_t(2)), val_t(1)/3);
     std::vector<val_t> roots(3);
 
@@ -178,8 +69,7 @@ std::vector<val_t> roots_cubic(const Polynomial<val_t>& poly)
 val_t root_binary_search(const Polynomial<val_t>& p, val_t l, val_t r)
 {
     bool f = p(l) < 0;
-    while (r-l > EPS*my_abs(l))
-    //while (r-l > EPS*my_abs(l))
+    while (r-l > EPS*abs(l))
     {
         val_t m = (l+r)/2;
         if ((p(m) < 0) == f)
@@ -234,9 +124,13 @@ std::vector<val_t> find_roots(const Polynomial<val_t>& p, val_t l, val_t r)
 
     size_t i = 0;
 
-    const int MAX_ITERS = 20000;
+#ifdef MULTIPRECISION
+    const int MAX_ITERS = 200*DIGITS;
+#else
+    const int MAX_ITERS = 2000;
+#endif
 
-    for (; my_abs(curr-prev) > my_abs(curr*EPS) && i < MAX_ITERS; i++)
+    for (; abs(curr-prev) > abs(curr*EPS) && i < MAX_ITERS; i++)
     {
         prev = curr;
         curr = curr - p(curr)/dp(curr);

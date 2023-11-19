@@ -1,76 +1,48 @@
 #include "functions.h"
 #include <string>
 #include <fstream>
-#include <complex>
 
-
-void process(val_t eps, size_t n = 5)
-{
-    size_t k = 4;
-    val_t h = (B-A)/k;
-    val_t L = 1.6;
-
-
-    for (int i = 1;;i++)
-    {
-        bool gauss = 1;
-        val_t s1 = integrate(f,A,B,h,gauss,n);
-        val_t s2 = integrate(f,A,B,h/L,gauss,n);
-        val_t s3 = integrate(f,A,B,h/L/L,gauss,n);
-
-        std::cout.precision(20);
-
-        val_t m  = my_abs(my_log(my_abs((s3-s2)/(s2-s1)))/my_log(L));
-        val_t cm = my_abs(s3-s2) / my_pow(h/L,m) / (1 - 1/my_pow(L,m));
-        std::cout <<'#' << i << " Cm = " << cm << "  h = " << h/L/L << "  m = " << m << "  " << cm*my_pow(h/L/L, m)<<'\n'; 
-        
-        //std::cout.precision(std::numeric_limits<val_t>::digits10);
-        std::cout.precision(20);
-        std::cout << "Sh = " << s3 << "\n\n";
-        std::cout.precision(3);
-
-        if (cm*my_pow(h/L/L, m) < eps)
-            break;
-
-        //h /= 2;
-        h = my_pow(eps/cm, 1/m) *L*L;
-    }
-}
 
 signed main(int argc, char** argv)
 {
+    using namespace std;
+    std::function<val_t(val_t)> f = [](val_t x)->val_t {return 4*cos(x/2)*exp(-2*x/3) + val_t(12)/5 * sin(9*x/2)*exp(x/8)+2;};
+    //std::function<val_t(val_t)> f = [](val_t x)->val_t {return pow(x,10)+pow(x,9)+pow(x,8)+x*x+x+1+exp(x);};
+    val_t A = val_t(13)/10, B = val_t(22)/10, beta = val_t(5)/6;
+
+    
     //std::cout.precision(std::numeric_limits<val_t>::digits10);
-    process(1e-16, std::stoi(argv[1]));
-    //std::cout << integrate_gauss(f,A,B,35).res << '\n';
-    // 4.389308255579691622482841331293167979052130308324017142
+    string s("12.5818467721890266025251714551070231833486414946048158140881054801021790122047597920465776312160354");
+    //string s("23.17747840368038699937255372663352073488484164038818032697609060901458122750935151781353633120826208");
+#ifdef MULTIPRECISION
+    val_t exact(s);
+#else
+    val_t exact = stold(s);
+#endif
 
-    
-    //
-    //val_t exact("12.5818467721890266025251714551070231833486414946048158140881054801021790122047597920465776312160354"); 
-    //val_t exact = std::stod("12.581846772189026602525");
+    int k = 3;
+    val_t h = 0.1;
+    val_t m,cm;
+    val_t L = 1.5;
+    val_t sum1, sum2 = integrate_qaws(f,A,B,0,beta,h,1,k);
+    h /= L;
+    val_t sum3 = integrate_qaws(f,A,B,0,beta,h,1,k);
 
-    /*
-    val_t minn = 1;
-    val_t absmin;
-    int min_n = -1;
+    printf("%6s %7s %13s %10s %10s\n", "h", "m", "cm", "est err","abs err");
 
-    std::ofstream fout("data.txt");
-    for (int n = 6; n < 50; n++)
+    for (int i = 0; ; i++)
     {
-        auto [sum, abs_sum] = integrate_newton(f,A,B,n);
-        fout << n << ' ' << my_log(abs_sum) << '\n';
-        if (my_abs(sum - exact) < minn)
-        {
-            min_n = n;
-            minn = my_abs(sum - exact);
-            absmin = abs_sum;
-        }
+        h /= L;
+        sum1 = sum2;
+        sum2 = sum3;
+        sum3 = integrate_qaws(f,A,B,0,beta,h,1,k);
+        
+
+        m = abs(log(abs(sum3-sum2)/abs(sum2-sum1)) / log(L));
+        cm = abs(sum3-sum2)/pow(h,m)/(pow(L,m)-1);
+
+        printf("%10.3e %7.3f %10.3e %10.3e %10.3e\n", double(h), double(m), double(cm), double(cm*pow(h,m)), double(abs(exact-sum3)));
     }
-    fout.close();
-    std::cout << minn << '\n' << min_n << '\n' << absmin <<"\n\n";
-    */
-    //process(std::stod(argv[1]));
-//    std::cout << integrate_gauss(f,A,B,std::stoi(argv[1])).res << '\n';
-    //std::cout << integrate(f,A,B,hopt,true,m) << '\n';
     
+    return 0;
 }
